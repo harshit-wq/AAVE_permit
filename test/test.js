@@ -5,15 +5,17 @@ const { soliditySha3 } = require("web3-utils");
 const dotenv = require('dotenv');
 dotenv.config();
 
-const alchemy_key = process.env.ALCHEMY_API_KEY;
 const private_key = process.env.PRIVATE_KEY;
+const public_address = process.env.PUBLIC_ADDRESS;
+const deadline = process.env.DEADLINE_FOR_TRANSACTION;
+const value = process.env.VALUE_FOR_PERMIT;
 
 describe("starting tests", function () {
     let sender;
     let spender;
     const aave_token_address="0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9";
     const address_having_aave_tokens = "0xddfAbCdc4D8FfC6d5beaf154f18B778f892A0740";
-    const address_having_no_aave_tokens = "0x3Fc046bdE274Fe8Ed2a7Fd008cD9DEB2540dfE36";
+    const address_having_no_aave_tokens = public_address;
     let contract;
 
   
@@ -56,8 +58,8 @@ describe("starting tests", function () {
             console.log("balance in sender's account: ",await aave_token_contract.balanceOf(sender.address));
             console.log("balance in spender's account :",await aave_token_contract.balanceOf(spender.address));
 
-            await aave_token_contract.connect(sender).approve(spender.address,10000000);
-            await aave_token_contract.connect(spender).transferFrom(sender.address,spender.address,10000000);
+            await aave_token_contract.connect(sender).approve(spender.address,value);
+            await aave_token_contract.connect(spender).transferFrom(sender.address,spender.address,value);
 
             console.log("balance in sender's account after transaction: ",await aave_token_contract.balanceOf(sender.address));
             console.log("balance in spender's account after transaction:",await aave_token_contract.balanceOf(spender.address));
@@ -68,8 +70,6 @@ describe("starting tests", function () {
         
         it("creating hash, signing, calling permit, transfer", async function(){
 
-            const deadline_key=1000000000000 //to be safe
-
             //getting the parameters which will be used to generate data hash
             let PERMIT_TYPEHASH = await contract.methods.PERMIT_TYPEHASH().call();
             let currentValidNonce = await contract.methods._nonces(spender.address).call();
@@ -77,7 +77,7 @@ describe("starting tests", function () {
 
             
             // generating the hash to sign using private key, the hash will be similar to the one that will be sent as a message in permit function 
-            const encoded = web3.eth.abi.encodeParameters(['bytes32', 'address', 'address', 'uint256', 'uint256', 'uint256'],[PERMIT_TYPEHASH, spender.address, sender.address, 10000000, currentValidNonce, deadline_key]);
+            const encoded = web3.eth.abi.encodeParameters(['bytes32', 'address', 'address', 'uint256', 'uint256', 'uint256'],[PERMIT_TYPEHASH, spender.address, sender.address, value, currentValidNonce, deadline]);
             const hash = web3.utils.keccak256(encoded, {encoding: 'hex'});
 
             const hash1_for_encodePacked = soliditySha3('\x19\x01', DOMAIN_SEPARATOR, hash);
@@ -89,12 +89,12 @@ describe("starting tests", function () {
             const { v, r, s } = EthUtil.ecsign(Buffer.from(hash1_for_encodePacked.slice(2), 'hex'), Buffer.from(private_key.slice(2), 'hex'));
 
             //the sender calls permit function to take the allowance of fund transfer from the spender(me) (Remember that they were interchanged)
-            await aave_token_contract.connect(sender).permit(spender.address,sender.address,10000000,deadline_key,v, hexlify(r), hexlify(s));
+            await aave_token_contract.connect(sender).permit(spender.address,sender.address,value,deadline,v, hexlify(r), hexlify(s));
             console.log("Permission granted by me to the sender to transfer funds");
 
 
             //calling the transfer from from sender to transfer the amount that was allowed by the spender (Remember that the sender and spender were interhcnaged)
-            await aave_token_contract.connect(sender).transferFrom(spender.address,sender.address,"10000000");
+            await aave_token_contract.connect(sender).transferFrom(spender.address,sender.address,value);
             console.log("The transaction has been made using permit and transfer functions")
 
 
