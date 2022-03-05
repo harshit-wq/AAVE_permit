@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "dotenv": "^16.0.0",
-    "ethers-utils": "^2.1.11"
+    "ethers-utils": "^2.1.11",
+    "web3-eth-personal": "^1.7.1"
   }
 }
