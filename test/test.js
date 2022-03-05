@@ -76,59 +76,48 @@ describe("starting tests", function () {
     describe("tests", function(){
         it("testing_balance", async function(){
             console.log("balance in sender's account: ",await aave_token_contract.balanceOf(sender.address));
-            console.log("balance in spender's account :",await aave_token_contract.balanceOf(spender.address))
+            console.log("balance in spender's account :",await aave_token_contract.balanceOf(spender.address));
+
+            await aave_token_contract.connect(sender).approve(spender.address,10000000);
+            await aave_token_contract.connect(spender).transferFrom(sender.address,spender.address,10000000);
+
+            console.log("balance in sender's account after transaction: ",await aave_token_contract.balanceOf(sender.address));
+            console.log("balance in spender's account after transaction:",await aave_token_contract.balanceOf(spender.address));
+
+            //spender and sender has been interhcanged as i have only my private key so i can sign with it only
         });
         
         it("testing permit", async function(){
-            //const currentBlock = await web3.eth.getBlock("latest");
-            //console.log("current time: ",currentBlock.timestamp);
-            //console.log("deadline set: ",Number.MAX_SAFE_INTEGER);
-            await aave_token_contract.connect(sender).approve(spender.address,10000000);
-            await aave_token_contract.connect(spender).transferFrom(sender.address,spender.address,10000000);
-            console.log("balance in sender's account: ",await aave_token_contract.balanceOf(sender.address));
-            console.log("balance in spender's account :",await aave_token_contract.balanceOf(spender.address));
 
+            const deadline_key=1000000000000 //to be safe
 
-            //spender and sender has been interhcanged as i have only my private key
-
+            //getting the parameters which will be used to generate data hash
             let PERMIT_TYPEHASH = await contract.methods.PERMIT_TYPEHASH().call();
             let currentValidNonce = await contract.methods._nonces(spender.address).call();
             let DOMAIN_SEPARATOR = await contract.methods.DOMAIN_SEPARATOR().call();
-            console.log(PERMIT_TYPEHASH);
-            console.log(currentValidNonce);
-            console.log(DOMAIN_SEPARATOR);
+
             
-            //const check_it_inert=await instance.checking(PERMIT_TYPEHASH, owner.address, spender.address, 10000000, currentValidNonce, 10000000);
-            check_it_inert=await instance.func(PERMIT_TYPEHASH, spender.address, sender.address, 10000000, currentValidNonce, 1000000000000);
-            console.log(check_it_inert);
-
-            //const print = web3.utils.keccak256(PERMIT_TYPEHASH, owner.address, spender.address, 10000000, currentValidNonce, 10000000);
-            //const print = web3.utils.keccak256("PERMIT_TYPEHASH, owner, spender, value, currentValidNonce, deadline");
-            const encoded = web3.eth.abi.encodeParameters(['bytes32', 'address', 'address', 'uint256', 'uint256', 'uint256'],[PERMIT_TYPEHASH, spender.address, sender.address, 10000000, currentValidNonce, 1000000000000]);
+            // generating the hash to sign using private key, the hash will be similar to the one that will be sent as a message in permit function 
+            const encoded = web3.eth.abi.encodeParameters(['bytes32', 'address', 'address', 'uint256', 'uint256', 'uint256'],[PERMIT_TYPEHASH, spender.address, sender.address, 10000000, currentValidNonce, deadline_key]);
             const hash = web3.utils.keccak256(encoded, {encoding: 'hex'});
-            console.log(hash);
-
-            const check_it_inert1=await instance.func1(DOMAIN_SEPARATOR, PERMIT_TYPEHASH, spender.address, sender.address, 10000000, currentValidNonce, 1000000000000);
-            console.log(check_it_inert1);
-
-            /*const encoded1 = web3.eth.abi.encodeParameters(['string', 'bytes32', 'bytes32'],['\x19\x01', DOMAIN_SEPARATOR, hash]);
-            const hash1 = web3.utils.keccak256(encoded1, {encoding: 'hex'});     -> does not work in encodePacked
-            console.log("this is final that should be validated: ",hash1);*/
 
             const hash1_for_encodePacked = soliditySha3('\x19\x01', DOMAIN_SEPARATOR, hash);
-            console.log("final here", hash1_for_encodePacked);
+            console.log("The hash that will be signed using private key: ", hash1_for_encodePacked);
 
+
+
+            //getting the r ,s ,v from the signature which will be passed as arguments in permit function
             const { v, r, s } = EthUtil.ecsign(Buffer.from(hash1_for_encodePacked.slice(2), 'hex'), Buffer.from(private_key.slice(2), 'hex'));
 
-            //spender and sender has been interchanged, sender is me.
-            const check=await instance.permit(PERMIT_TYPEHASH,DOMAIN_SEPARATOR,currentValidNonce,spender.address,sender.address,10000000,1000000000000,v,hexlify(r), hexlify(s));
-            console.log(check);
+            //the sender calls permit function to take the allowance of fund transfer from the spender(me) (Remember that they were interchanged)
+            await aave_token_contract.connect(sender).permit(spender.address,sender.address,10000000,deadline_key,v, hexlify(r), hexlify(s));
+            console.log("Permission granted by me to the sender to transfer funds");
 
-            console.log("should be:", spender.address);
-            await aave_token_contract.permit(spender.address,sender.address,10000000,1000000000000,v, hexlify(r), hexlify(s));
-            console.log("permited by me to the sender to transfer");
-            console.log(await contract.methods.balanceOf(sender.address).call())
+
+            //calling the transfer from from sender to transfer the amount that was allowed by the spender (Remember that the sender and spender were interhcnaged)
             await aave_token_contract.connect(sender).transferFrom(spender.address,sender.address,"10000000");
+
+            //getting the finla balances
             console.log("balance in sender's account: ",await aave_token_contract.balanceOf(sender.address));
             console.log("balance in spender's account :",await aave_token_contract.balanceOf(spender.address));
         });
